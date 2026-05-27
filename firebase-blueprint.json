@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "SharedItinerary": {
+      "title": "SharedItinerary",
+      "description": "A persistent travel package shared by a user containing custom days and activities",
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "string",
+          "description": "Name of the target travel destination"
+        },
+        "durationDays": {
+          "type": "integer",
+          "description": "Length of the trip in days"
+        },
+        "recommendedTravelDates": {
+          "type": "string",
+          "description": "Suggested travel window/season"
+        },
+        "isFallback": {
+          "type": "boolean",
+          "description": "Whether the itinerary was generated using offline backup logic"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the itinerary was shared"
+        }
+      },
+      "required": ["destination", "durationDays"]
+    }
+  },
+  "firestore": {
+    "shared_itineraries/{itineraryId}": {
+      "schema": "SharedItinerary",
+      "description": "Publicly readable shared dynamic travel packages"
+    }
+  }
+}

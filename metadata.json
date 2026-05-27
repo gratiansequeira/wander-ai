@@ -1,0 +1,6 @@
+{
+  "name": "Wander AI",
+  "description": "Your AI Travel Co-pilot tailoring pristine, real-time custom travel itineraries. Complete with dynamic budgeting, flight times, packing checklists, and local safety rules.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Catch-All Security Gate
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // High fidelity schema validations
+    function isValidSharedItinerary(data) {
+      return data.keys().hasAll(['destination', 'durationDays'])
+        && (data.destination is string && data.destination.size() >= 1 && data.destination.size() <= 200)
+        && (data.durationDays is int && data.durationDays >= 1 && data.durationDays <= 30)
+        && (!('recommendedTravelDates' in data) || (data.recommendedTravelDates is string && data.recommendedTravelDates.size() <= 200))
+        && (!('isFallback' in data) || data.isFallback is bool);
+    }
+
+    // Match block for the Shared Itineraries Collection
+    match /shared_itineraries/{itineraryId} {
+      allow get: if isValidId(itineraryId);
+      allow list: if false; // Strict no-list rule to block indexing or enumeration
+      allow create: if isValidId(itineraryId) && isValidSharedItinerary(incoming());
+      allow update, delete: if false; // Absolute immutability model
+    }
+  }
+}
