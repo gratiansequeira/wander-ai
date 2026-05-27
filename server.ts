@@ -125,8 +125,8 @@ async function generateContentWithRetryAndFallback(params: {
   };
 
   try {
-    // Attempt with the primary model first
-    return await callWithBackoff(primaryModel, 3, 1000);
+    // Attempt with the primary model first (max 2 attempts to minimize latency pressure)
+    return await callWithBackoff(primaryModel, 2, 800);
   } catch (primaryError: any) {
     console.error(`[Gemini API Primary Error] Primary model "${primaryModel}" completely unsuccessful:`, primaryError.message || primaryError);
     
@@ -450,7 +450,7 @@ const itineraryResponseSchema = {
                 id: { type: Type.STRING, description: "A unique string ID for editing/deleting tasks. Generate UUID format or unique tag like act-1-1" },
                 time: { type: Type.STRING, description: "Time of the day e.g. 09:00 AM - 10:30 AM" },
                 activityName: { type: Type.STRING, description: "Highly specific name of the activity, detailing the real-world venue, specific restaurant name, or sightseeing attraction rather than generic words. Never use placeholders." },
-                description: { type: Type.STRING, description: "A deeply detailed paragraph of 3-4 sentences packed with real, highly practical concierge-level recommendations. Name specific dishes to order (with local specialty name), exact panoramic viewpoint coordinates or paths, little-known historical secrets, or exact local advice to beat the crowd." },
+                description: { type: Type.STRING, description: "An extremely descriptive, highly practical concierge-level field tip of 1-2 concise but dense sentences. Name specific dishes to order (with local specialty name), exact panoramic viewpoint coordinates or paths, little-known historical secrets, or exact local advice to beat the crowd." },
                 locationName: { type: Type.STRING, description: "Exact name of the real restaurant, museum, park, etc. Must be a specific, real physical location." },
                 estimatedCost: { type: Type.NUMBER, description: "Estimated cost in USD for this participant" },
                 bookingNeeded: { type: Type.BOOLEAN, description: "Whether this must be booked in advance" },
@@ -1273,7 +1273,7 @@ CRITICAL REQUISITES & LOGIC TO ACCOUNT FOR:
    - For 'relaxed' pace, you can schedule 2 to 3 distinct activities.
    - NEVER use generic, vague, or high-level placeholders (e.g., do NOT just write "Explore the neighborhood", "Eat local food", "Visit a cathedral", or "Have dinner at a local spot").
    - EVERY activity name MUST reference a specific, real-world venue, restaurant, viewpoint, or sightseeing attraction (e.g., "Savor Traditional Tonkotsu Ramen at Ichiran Shinjuku" or "Scenic Ride on the historic Peak Tram to Victoria Peak").
-   - Each and every single activity's 'description' must contain a deeply detailed paragraph of 3-4 sentences packed with real, highly practical concierge-level field knowledge. Name specific dishes to order (with local specialty name), exact viewpoint locations, little-known historical secrets, or real local hacks to avoid crowds.
+   - Each and every single activity's 'description' must contain an extremely descriptive, highly practical concierge-level field tip of 1-2 concise but dense sentences. Name specific dishes to order (with local specialty name), exact viewpoint locations, little-known historical secrets, or real local hacks to avoid crowds.
 8. **Seasonality, Closing Times & Day of Week Logic**:
    - Standard operating/opening hours and closing days of the week MUST be verified for all recommended sights and venues. For example, do not schedule museums or markets on days of the week they are traditionally closed (e.g., Louvre is closed on Tuesdays, most Kyoto museums are closed on Mondays, specify alternative weekdays instead).
    - Carefully optimize the daily activity sequence to align with local daylight windows, seasonal climate factors, or specific daytime window constraints of the selected dates (${hasDates ? `from ${startDate} to ${endDate}` : `Spring/Summer 2026`}). If a conflict is detected, dynamically re-arrange, switch the activity order, or replace the venue with a highly engaging and open alternative. \n9. **Supporting Recommendation Links**:
@@ -1301,7 +1301,7 @@ Please output the result strictly in JSON according to this response schema. No 
     });
 
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Gemini API call exceeded standard threshold of 75 seconds")), 75000);
+      setTimeout(() => reject(new Error("Gemini API call exceeded standard threshold of 90 seconds")), 90000);
     });
 
     const response: any = await Promise.race([apiCallPromise, timeoutPromise]);

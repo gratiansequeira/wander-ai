@@ -464,11 +464,97 @@ export default function ItineraryViewer({
         )}
       </div>
 
-      {/* Print-Only Header */}
-      <div className="hidden print:block mb-8 border-b-2 border-slate-900 pb-4">
-        <h1 className="text-3xl font-black text-slate-900 uppercase">Wander AI Plan</h1>
-        <p className="text-lg font-bold text-slate-800">{itinerary.destination} &bull; {itinerary.durationDays} Days</p>
-        <p className="text-xs text-slate-500 mt-1">Prepared: May 25, 2026 &bull; Travel Dates Recommended: {itinerary.recommendedTravelDates}</p>
+      {/* Dynamic Professional Brochure Cover (Only printed) */}
+      <div className="hidden print:block page-break-after border-b-4 border-slate-900 pb-8 mb-8">
+        <div className="flex justify-between items-start mb-10 pb-4 border-b border-slate-200">
+          <div>
+            <span className="text-xs uppercase font-extrabold tracking-widest text-indigo-700">Premium Bespoke Travel Plan</span>
+            <h1 className="text-4xl font-black text-slate-950 tracking-tight leading-none mt-2">Wander AI Travel Co-pilot</h1>
+          </div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase text-right leading-tight">
+            SYSTEM GENERATED<br />
+            PREPARED FOR DEPARTURE
+          </span>
+        </div>
+
+        <div className="bg-slate-900 text-white rounded-3xl p-8 mb-8 relative overflow-hidden">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400 block mb-2">Primary Destination Coordinates</span>
+          <h2 className="text-3xl font-black uppercase tracking-tight text-white mb-2">{itinerary.destination}</h2>
+          
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-xs mt-6 pt-6 border-t border-slate-800">
+            <div>
+              <span className="text-slate-400 font-semibold block uppercase text-[10px]">Pacing Modality</span>
+              <span className="font-extrabold text-white text-sm capitalize">Curated Pace</span>
+            </div>
+            <div>
+              <span className="text-slate-400 font-semibold block uppercase text-[10px]">Voyage Duration</span>
+              <span className="font-extrabold text-white text-sm">{itinerary.durationDays} Days</span>
+            </div>
+            <div>
+              <span className="text-slate-400 font-semibold block uppercase text-[10px]">Hub Departure Gate</span>
+              <span className="font-extrabold text-white text-sm">{departureCity}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 font-semibold block uppercase text-[10px]">Recommended Dates</span>
+              <span className="font-extrabold text-white text-sm">{itinerary.recommendedTravelDates}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 my-8">
+          {/* Section 1: Visa & Requirements */}
+          <div className="bg-amber-50/60 rounded-2xl p-6 border border-amber-200">
+            <h4 className="font-black text-xs uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-1.5">
+              <span>✈️ Passport & Entry Visa Status Overview</span>
+            </h4>
+            <div className="text-xs text-slate-800 space-y-2 leading-relaxed">
+              <p className="font-semibold text-slate-950">
+                Primary nationality passport declared: <span className="underline font-black uppercase text-amber-950">{itinerary.citizenshipStatus}</span>
+              </p>
+              <div className="p-3 bg-white rounded-xl border border-amber-200 font-normal leading-relaxed text-slate-700 text-[11px]">
+                {itinerary.visaConditions}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Financial Estimates & Ledgers */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+            <h4 className="font-black text-xs uppercase tracking-wider text-indigo-900 mb-3 flex items-center gap-1.5">
+              <span>💳 Verified Dynamic Cost Projections</span>
+            </h4>
+            <div className="space-y-2.5 text-xs text-slate-800">
+              <div className="flex justify-between border-b border-slate-150 pb-1.5 font-semibold">
+                <span>Budget Level Preset:</span>
+                <span className="font-extrabold capitalize text-slate-950">{itinerary.budget.accommodation.type.split(' ')[0]} Mode</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px] text-slate-600">
+                <span>Accommodations (Estimated):</span>
+                <span className="font-mono text-slate-950 font-bold">${itinerary.budget.accommodation.estimatedCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px] text-slate-600">
+                <span>Transit & Transit Hubs:</span>
+                <span className="font-mono text-slate-950 font-bold">${itinerary.budget.transport.estimatedCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px] text-slate-600">
+                <span>Planned Group Activities:</span>
+                <span className="font-mono text-slate-950 font-bold">${itinerary.budget.activities.estimatedCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px] text-slate-600">
+                <span>Dining, Hospitality & Misc Allotment:</span>
+                <span className="font-mono text-slate-950 font-bold">${itinerary.budget.foodAndMisc.estimatedCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center border-t-2 border-slate-900 pt-2 font-bold text-slate-950 text-sm mt-2">
+                <span>Estimated Total Outlay:</span>
+                <span className="font-mono text-indigo-600 font-black">${itinerary.budget.totalEstimated.toLocaleString()} USD</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-slate-50 border border-slate-150 rounded-2xl text-[11px] leading-relaxed text-slate-600 mt-4">
+          <p className="font-bold text-slate-950 mb-1">📋 Notice from Wander AI Co-pilot:</p>
+          This is an off-line printable copy of your active, system-calibrated travel itinerary. Dynamic links for booking flights, accommodations, and secure reservation rooms are preserved in the digital copy. Live currency translations and real-time transit calculation widgets are active on the web app version.
+        </div>
       </div>
 
       {/* Grid Layout: Left Column (Itinerary & Details) | Right Column (Visa & Checklist & Budget) */}
@@ -1317,9 +1403,9 @@ export default function ItineraryViewer({
             <div key={act.id || actIdx} className="relative group/item">
               
               {/* Timeline bubble node indicator */}
-              <span className="absolute -left-[24px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white bg-slate-950 flex items-center justify-center ring-4 ring-slate-100" />
+              <span className="absolute -left-[24px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white bg-slate-950 timeline-dot flex items-center justify-center ring-4 ring-slate-100" />
 
-              <div className="bg-white border hover:border-slate-250 rounded-2xl p-4 transition-all duration-200 shadow-2xs">
+              <div className="bg-white border hover:border-slate-250 rounded-2xl p-4 transition-all duration-200 shadow-2xs break-inside-avoid">
                 
                 {/* Header Row: Duration & Edit/Delete Actions */}
                 <div className="flex justify-between items-start gap-4 flex-wrap">
