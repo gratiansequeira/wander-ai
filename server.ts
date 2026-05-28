@@ -440,7 +440,7 @@ const itineraryResponseSchema = {
         type: Type.OBJECT,
         properties: {
           dayNumber: { type: Type.INTEGER },
-          date: { type: Type.STRING, description: "Date or Day reference label e.g. Day 1: Arrival" },
+          date: { type: Type.STRING, description: "The specific formatted calendar date for this day of travel (e.g., 'Wednesday, May 27, 2026' or 'Thursday, May 28, 2026' based on the travel timeframe). Spelled out with weekday, month, day, year." },
           theme: { type: Type.STRING, description: "Daily overview focus e.g. Historical Explorer" },
           activities: {
             type: Type.ARRAY,
@@ -450,7 +450,7 @@ const itineraryResponseSchema = {
                 id: { type: Type.STRING, description: "A unique string ID for editing/deleting tasks. Generate UUID format or unique tag like act-1-1" },
                 time: { type: Type.STRING, description: "Time of the day e.g. 09:00 AM - 10:30 AM" },
                 activityName: { type: Type.STRING, description: "Highly specific name of the activity, detailing the real-world venue, specific restaurant name, or sightseeing attraction rather than generic words. Never use placeholders." },
-                description: { type: Type.STRING, description: "An extremely descriptive, highly practical concierge-level field tip of 1-2 concise but dense sentences. Name specific dishes to order (with local specialty name), exact panoramic viewpoint coordinates or paths, little-known historical secrets, or exact local advice to beat the crowd." },
+                description: { type: Type.STRING, description: "A deeply detailed paragraph of 3-4 sentences packed with real, highly practical concierge-level recommendations. Name specific dishes to order (with local specialty name), exact panoramic viewpoint coordinates or paths, little-known historical secrets, or exact local advice to beat the crowd." },
                 locationName: { type: Type.STRING, description: "Exact name of the real restaurant, museum, park, etc. Must be a specific, real physical location." },
                 estimatedCost: { type: Type.NUMBER, description: "Estimated cost in USD for this participant" },
                 bookingNeeded: { type: Type.BOOLEAN, description: "Whether this must be booked in advance" },
@@ -556,6 +556,17 @@ const itineraryResponseSchema = {
         bookingDeepLink: { type: Type.STRING, description: "Google Flights booking query link customized with departures and destination airport codes or city names" }
       },
       required: ["preferredStops", "recommendedFlights", "bestPriceAdvice", "bookingDeepLink"]
+    },
+    accommodationRecommendation: {
+      type: Type.OBJECT,
+      description: "Custom Accommodation stay style and base camp location strategy",
+      properties: {
+        stayType: { type: Type.STRING, description: "Style of stay: 'hotel' or 'airbnb' or 'split' or 'other'" },
+        heading: { type: Type.STRING, description: "A dynamic engaging headline summary" },
+        locationStrategy: { type: Type.STRING, description: "Nights split breakdown or base camp geography recommendation" },
+        detailedReasoning: { type: Type.STRING, description: "Detailed reasons contrasting Hotels/Airbnbs, analyzing layout of the island/city, transit benefits" }
+      },
+      required: ["stayType", "heading", "locationStrategy", "detailedReasoning"]
     }
   },
   required: [
@@ -569,7 +580,8 @@ const itineraryResponseSchema = {
     "days",
     "preTravelChecks",
     "budget",
-    "flightDetails"
+    "flightDetails",
+    "accommodationRecommendation"
   ]
 };
 
@@ -747,6 +759,9 @@ function generateFallbackItinerary(preferences: any) {
   const departClean = (departure || "").split(',')[0].trim() || "Departure";
   const datesLabel = hasDates && startDate && endDate ? `${startDate} to ${endDate}` : "Late Spring/Summer 2026 Season Selection";
 
+  const resolvedAccommodationType = accommodationType === "ai_recommended" ? "both" : accommodationType;
+  const resolvedTransportType = transportType === "ai_recommended" ? "rental" : transportType;
+
   const totalDaily = customDailyBudgetLimit || 220;
   const totalTripCost = totalDaily * durationDays * peopleCount;
   
@@ -755,14 +770,25 @@ function generateFallbackItinerary(preferences: any) {
   const foodCost = Math.round(totalTripCost * 0.22);
   const activitiesTotalLimit = Math.round(totalTripCost * 0.15);
 
-  const hotelDeepLink = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(destination || "")}`;
-  const flightsDeepLink = `https://www.google.com/search?q=flights+from+${encodeURIComponent(departure || "")}+to+${encodeURIComponent(destination || "")}`;
-  const transitDeepLink = `https://www.google.com/search?q=car+rental+in+${encodeURIComponent(destination || "")}`;
+  let hotelDeepLink = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(destination || "")}`;
+  if (hasDates && startDate && endDate) {
+    hotelDeepLink = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(destination || "")}&checkin=${startDate}&checkout=${endDate}`;
+  }
+  let flightsDeepLink = `https://www.google.com/search?q=flights+from+${encodeURIComponent(departure || "")}+to+${encodeURIComponent(destination || "")}`;
+  if (hasDates && startDate && endDate) {
+    flightsDeepLink = `https://www.google.com/search?q=google+flights+from+${encodeURIComponent(departure || "")}+to+${encodeURIComponent(destination || "")}+departing+${startDate}+returning+${endDate}`;
+  }
+  let transitDeepLink = `https://www.google.com/search?q=car+rental+in+${encodeURIComponent(destination || "")}`;
+  if (hasDates && startDate && endDate) {
+    transitDeepLink = `https://www.google.com/search?q=car+rental+in+${encodeURIComponent(destination || "")}+from+${startDate}+to+${endDate}`;
+  }
 
   const accommodationTitle = accommodationType === 'hotel' 
     ? `Curated 4-Star Boutique Hotel in ${destClean}` 
     : accommodationType === 'airbnb' 
     ? `Charming Local Premium Villa/Airbnb in ${destClean}` 
+    : accommodationType === 'ai_recommended'
+    ? `Wander AI Recommended Lodgings (Comfortable hybrid of boutique hotels & stylish local homes) near ${destClean}`
     : `Comfortable Guest Suites & Boutique Stays near ${destClean}`;
 
   const transportTitle = transportType === 'rental' 
@@ -818,6 +844,28 @@ function generateFallbackItinerary(preferences: any) {
   
   for (let d = 1; d <= durationDays; d++) {
     const idx = (d - 1);
+    
+    let calculatedDate = "";
+    if (hasDates && startDate) {
+      try {
+        const startParts = startDate.split('-');
+        const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]));
+        const currentDay = new Date(start.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+        const options: any = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        calculatedDate = currentDay.toLocaleDateString('en-US', options);
+      } catch {
+        calculatedDate = `Day ${d} (${startDate})`;
+      }
+    } else {
+      try {
+        const start = new Date(2026, 5, 15); // June 15, 2026
+        const currentDay = new Date(start.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+        const options: any = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        calculatedDate = currentDay.toLocaleDateString('en-US', options);
+      } catch {
+        calculatedDate = `Day ${d} (June 15, 2026)`;
+      }
+    }
     
     // Activity Candidate Slot Definitions (Hyper-Detailed & Personalized)
     const slot1Name = spotSource.coffee[idx % spotSource.coffee.length];
@@ -1095,9 +1143,9 @@ function generateFallbackItinerary(preferences: any) {
       travelDetailsToNext: act.travelDetailsToNext || "Prepare for the next highlight"
     }));
 
-    days.push({
+     days.push({
       dayNumber: d,
-      date: `Day ${d}: ${d === 1 ? 'Arrival' : d === durationDays ? 'Departure' : 'Exploration and Sightseeing'}`,
+      date: calculatedDate,
       theme: d === 1 ? "Arrival, Settle Inn & Welcome" : d === durationDays ? "Farewells & Homebound Flights" : `Immersive Culture & ${selectedInterests[d % selectedInterests.length] || 'Premium Sightseeing'}`,
       activities: activities
     });
@@ -1146,7 +1194,7 @@ function generateFallbackItinerary(preferences: any) {
       ? `Holders of a ${citizenship} passport entering ${destination} typically receive Visa-Free entry length or e-Visa privileges (up to 30 to 90 days depending on immigration portals). Ensure your passport remains fully valid for at least six months from your selected dates.`
       : `Excellent news! Since this is a Domestic Trip, standard US domestic regulations apply. No international physical visa is necessary; simply travel with valid state-issued identity documents.`,
     recommendedTravelDates: datesLabel,
-    whyThisRecommendation: `We optimized these recommendations specifically according to your custom $${totalDaily}/day daily multiplier, tailored for ${peopleCount} participant(s). We selected ${accommodationType === 'both' ? "a mix of hotels & boutique Airbnbs" : accommodationType} and structured timing sequences around a highly engaging ${pace} pace to completely avoid fatigue while reflecting custom interests in ${selectedInterests.join(', ') || 'sightseeing'}.`,
+    whyThisRecommendation: `We optimized these recommendations specifically according to your custom $${totalDaily}/day daily multiplier, tailored for ${peopleCount} participant(s). We selected ${accommodationType === 'both' ? "a mix of hotels & boutique Airbnbs" : accommodationType === "ai_recommended" ? "the most strategic lodging type dynamically recommended by AI" : accommodationType} and structured timing sequences around a highly engaging ${pace} pace to completely avoid fatigue while reflecting custom interests in ${selectedInterests.join(', ') || 'sightseeing'}.`,
     whyThisRecommendationLinks: [
       { title: `${destClean} Seasonal Climate & Packing Guide`, url: `https://www.google.com/search?q=${encodeURIComponent(destClean)}+seasonal+climate+and+packing+guide` },
       { title: `Local Transit & Logistics Advice for ${destClean}`, url: `https://www.google.com/search?q=${encodeURIComponent(destClean)}+local+transit+and+logistics+advice` }
@@ -1178,6 +1226,14 @@ function generateFallbackItinerary(preferences: any) {
       currency: "USD"
     },
     flightDetails: getFallbackFlights(departure, destination, preferredStops),
+    accommodationRecommendation: {
+      stayType: accommodationType === 'both' ? "split" : accommodationType === 'ai_recommended' ? "split" : accommodationType,
+      heading: `Local Concierge Recommendation: Stay in style near central ${destClean}`,
+      locationStrategy: isRoadtrip 
+        ? `Split Stay Recommended: Set up Base 1 near the western side for scenic exploration, and Base 2 near the eastern/coast side for highlights.` 
+        : `Single Base Recommended: Stay centrally inside the downtown / core cultural hub to enable rapid walking exploration and simple transit.`,
+      detailedReasoning: `For ${destClean}, choosing ${accommodationType === 'both' ? 'a hybrid of cozy Airbnbs and premium hotels' : accommodationType === 'ai_recommended' ? 'the AI-selected custom lodging type (hotels or boutique private homes)' : accommodationType + 's'} provides a versatile blend of comfort, kitchens, and service support. Setting up base camp as suggested reduces overall backtracking, minimizes check-in friction, and coordinates beautifully with standard check-in hours at 15:00.`
+    },
     isFallback: true
   };
 }
@@ -1242,7 +1298,7 @@ Please apply the following updated travel choices to update and refine it:
 - **Duration**: ${durationDays ? `${durationDays} Days` : "Recommend logical days for this specific destination"}
 - **Preferred Arrival Time at Destination**: ${arrivalTime || "04:00 PM"} (on Day 1)
 - **Preferred Departure Time from Destination**: ${departureTime || "10:00 AM"} (on last day)
-- **Accommodation Preference**: ${accommodationType} (options include hotel, airbnb, or both)
+- **Accommodation Preference**: ${accommodationType === 'ai_recommended' ? 'AI Recommended (You decide if hotels, airbnbs, or a hybrid/split thereof is the absolute best accommodation match for this specific destination, and customize the lodgings/stay details accordingly)' : accommodationType} (options include hotel, airbnb, or both)
 - **Pace preference**: ${pace} (options: relaxed, balanced, adventurous)
 - **Number of travelers**: ${peopleCount} participant(s)
 - **Interested activities**: ${[...selectedInterests, ...customTags].join(", ")}
@@ -1260,11 +1316,12 @@ CRITICAL REQUISITES & LOGIC TO ACCOUNT FOR:
 4. **Pre-booking alerts**: Provide a detailed list of pre-travel preparations (Pre-travel checklist) like ticket bookings in advance (e.g. for famous state parks, national parks, popular cruises, or premium restaurants).
 5. **Real-world Deep Links**: Generate real-world search and booking deep-links:
    - Include deep search links to Hotel listings, Airbnb listings, Flight/travel bookings, or car rentals. Customize URLs with ${encodeURIComponent(destination)} to make them clickable deep links.
+   - **MUST USE SPECIFIED TRAVEL DATES IN LINKS**: If travel dates are specified (${hasDates ? `from ${startDate} to ${endDate}` : 'not specified'}), you MUST append these dates to the search query strings in the booking URLs so users get live real-market values.
    - Example templates:
-     - Booking.com: 'https://www.booking.com/searchresults.html?ss=POS_TAG_NAME'
-     - Airbnb: 'https://www.airbnb.com/s/POS_TAG_NAME/homes'
-     - Google Flights/Search: 'https://www.google.com/search?q=flights+from+DEPART_CITY+to+DEST_CITY'
-     - TripAdvisor/Rental: 'https://www.google.com/search?q=car+rental+in+DEST_CITY' or similar relevant functional search strings. Replace placeholder spaces with '+'.
+     - Booking.com: 'https://www.booking.com/searchresults.html?ss=POS_TAG_NAME${hasDates && startDate && endDate ? `&checkin=${startDate}&checkout=${endDate}` : ''}'
+     - Airbnb: 'https://www.airbnb.com/s/POS_TAG_NAME/homes${hasDates && startDate && endDate ? `?checkin=${startDate}&checkout=${endDate}` : ''}'
+     - Google Flights/Search: 'https://www.google.com/search?q=google+flights+from+DEPART_CITY+to+DEST_CITY+departing+${startDate || ''}+returning+${endDate || ''}'
+     - TripAdvisor/Rental: 'https://www.google.com/search?q=car+rental+in+DEST_CITY+from+${startDate || ''}+to+${endDate || ''}' or similar relevant travel window search strings. Replace placeholder spaces with '+'.
    - **CRITICAL QUALITY CONTROL**: For individual scheduled day activity booking links ("bookingDeepLink"), do NOT use generic Airbnb or Hotel links. Instead, create a specific Google Search query to find tickets, tables, or bookings for that specific attraction/activity (e.g., 'https://www.google.com/search?q=book+tickets+for+ATTRACTION_NAME+in+DEST_CITY' or 'https://www.google.com/search?q=reserve+table+at+RESTAURANT_NAME+in+DEST_CITY'). Real-world event and guided sightseeing bookings must point to such a search rather than an accommodation site.
 6. **Timeline continuity**: Every activity must have a specific start and end time (times must format clearly, e.g., "09:00 AM - 10:30 AM"). Specify travel transitions in \`travelDetailsToNext\` and durations in \`travelTimeToNextMs\` (in minutes) where logical.
 7. **EXTREME DETAIL & ACCURATE PACING DENSITY**:
@@ -1273,16 +1330,29 @@ CRITICAL REQUISITES & LOGIC TO ACCOUNT FOR:
    - For 'relaxed' pace, you can schedule 2 to 3 distinct activities.
    - NEVER use generic, vague, or high-level placeholders (e.g., do NOT just write "Explore the neighborhood", "Eat local food", "Visit a cathedral", or "Have dinner at a local spot").
    - EVERY activity name MUST reference a specific, real-world venue, restaurant, viewpoint, or sightseeing attraction (e.g., "Savor Traditional Tonkotsu Ramen at Ichiran Shinjuku" or "Scenic Ride on the historic Peak Tram to Victoria Peak").
-   - Each and every single activity's 'description' must contain an extremely descriptive, highly practical concierge-level field tip of 1-2 concise but dense sentences. Name specific dishes to order (with local specialty name), exact viewpoint locations, little-known historical secrets, or real local hacks to avoid crowds.
+   - Each and every single activity's 'description' must contain a deeply detailed paragraph of 3-4 sentences packed with real, highly practical concierge-level field knowledge. Name specific dishes to order (with local specialty name), exact viewpoint locations, little-known historical secrets, or real local hacks to avoid crowds.
 8. **Seasonality, Closing Times & Day of Week Logic**:
-   - Standard operating/opening hours and closing days of the week MUST be verified for all recommended sights and venues. For example, do not schedule museums or markets on days of the week they are traditionally closed (e.g., Louvre is closed on Tuesdays, most Kyoto museums are closed on Mondays, specify alternative weekdays instead).
+   - Standard operating/opening hours and closing days of the week MUST be meticulously verified for all recommended sights, markets, and venues. You MUST determine the weekday for each sequential calendar date (e.g., Monday, Tuesday, Sunday) and ensure that no scheduled museum, local market, palace, castle, ferry, or attraction has closing day conflicts. For example, do not schedule the Louvre museum on Tuesdays; Versailles on Mondays; or standard wholesale fish markets/Tsukiji outer market on Sundays or Wednesdays.
+   - Analyze the specific season, temperature, climate patterns, or month of travel (e.g., snow conditions or winter road closures in Banff/Jasper; cherry blossom times in Japan; extreme heat or seasonal monsoons; winter closures for cable cars/ferries). If a requested sight or adventure is closed, inaccessible, or seasonal-only during the user's travel window (${hasDates ? `from ${startDate} to ${endDate}` : `the chosen dates`}), you MUST replace it with a suitable, highly rewarding open alternative.
    - Carefully optimize the daily activity sequence to align with local daylight windows, seasonal climate factors, or specific daytime window constraints of the selected dates (${hasDates ? `from ${startDate} to ${endDate}` : `Spring/Summer 2026`}). If a conflict is detected, dynamically re-arrange, switch the activity order, or replace the venue with a highly engaging and open alternative. \n9. **Supporting Recommendation Links**:
     - Under 'whyThisRecommendationLinks', synthesize 2-3 specific Search queries/links justifying why these travel dates, transit choices, or locations were selected. Format the query strictly for Google search, TripAdvisor, or Wikipedia (replace spaces with '+'), with clear human-readable titles (e.g., 'Kyoto Cherry Blossom Forecast Guide', 'Paris Metro Transit Survival Guide', 'Tokyo Weather in June Guide').
 10. **Flight Recommendations & Price Deal-Finding**:
     - Under 'flightDetails', you MUST keep the 'recommendedFlights' array completely EMPTY [] to allow users to search live real-time flights without pre-computed or hallucinated records.
-    - Set the bookingDeepLink to a clickable Google Flights search: 'https://www.google.com/search?q=google+flights+from+DEPARTURE+to+DESTINATION' (replacing DEPARTURE with the departure city/airport, and DESTINATION with the destination city).
+    - Set the bookingDeepLink to a clickable Google Flights search: 'https://www.google.com/search?q=google+flights+from+DEPARTURE+to+DESTINATION${hasDates && startDate && endDate ? `+departing+${startDate}+returning+${endDate}` : ''}' (replacing DEPARTURE with the departure city/airport, and DESTINATION with the destination city).
     - Under 'dealAlert', output highly useful travel advice on potential savings (e.g., 'Tip: Tuesdays and Wednesdays are often cheaper days to depart. Avoid weekend departures.').
     - Under 'bestPriceAdvice', provide a brief 2-3 sentence overview of historical booking windows and seasonal pricing to secure the best fares on this route.
+11. **Meticulous Calendar Date Spelling**:
+    - Under the 'date' property of each item in the 'days' array, you MUST output the precise calendar date for that day of travel.
+    - Calculate and formatted the calendar date sequentially. Spelled out completely with the weekday, month name, day, and year (e.g., "Wednesday, May 27, 2026" for Day 1, "Thursday, May 28, 2026" for Day 2, and so on).
+    - If preferred travel dates are specified (${hasDates ? `from ${startDate} to ${endDate}` : 'not specified'}), calculate the calendar date for each day sequentially starting from ${startDate || 'June 15, 2026'}.
+    - If dates were not specified, assume check-in / start date is Monday, June 15, 2026, and increment the days sequentially from there.
+12. **AI Accommodation & Base Camp Recommendation**:
+    - Under 'accommodationRecommendation', provide a highly creative, expert concierge stay blueprint tailored specifically to the geography of ${destination}.
+    - It MUST analyze whether the user should split their nights in separate local base camps or stay in one place. For islands (like Hawaii, Maui), large cities (like Tokyo/Kyoto, Paris/Amalfi split), recommend setting up home base on certain sides of the city/island to avoid massive backtracking (e.g. 'Nights 1-2 on the East Side/Hilo for Volcanoes, Nights 3-5 on the West Side/Kona for sunny beaches', or 'stay at a boutique design hotel vs. fully equipped home rentals').
+    - State 'stayType' (either 'hotel', 'airbnb', 'split', or 'other').
+    - State 'heading' (e.g., 'Recommended: Airbnb & Boutique Hotel Split Stay').
+    - State 'locationStrategy' (a concise, clear, scannable instruction on where to set up home base for which days/nights).
+    - State 'detailedReasoning' (a full 3-4 sentence detailed paragraph justification explaining local layout benefits, travel time calculations, and standard hotel check-in/out guidelines).
 
 Please output the result strictly in JSON according to this response schema. No commentary leading or trailing—MUST BE VALID PARSABLE JSON conforming to the structure described.`;
 
@@ -1316,18 +1386,11 @@ Please output the result strictly in JSON according to this response schema. No 
     return res.json(itineraryData);
 
   } catch (error: any) {
-    console.warn("Failed to generate itinerary with Gemini API (using fallback):", error.message || error);
-    // Directly output the stunning custom fallback dataset instantly to maintain an optimal user encounter
-    if (req.body && req.body.existingItinerary) {
-      console.log("Safely falling back to existing itinerary to avoid clearing user's edits");
-      const fallbackWithWarn = {
-        ...req.body.existingItinerary,
-        isFallback: true
-      };
-      return res.json(fallbackWithWarn);
-    }
-    const fallbackItinerary = generateFallbackItinerary(req.body);
-    return res.json(fallbackItinerary);
+    console.warn("Failed to generate itinerary with Gemini API:", error.message || error);
+    return res.status(500).json({
+      error: "Unable to retrieve accurate, real-time travel information because the AI travel service experienced an error or timeout. Please refresh the page or try your selection again to re-initiate calibration.",
+      details: error.message || String(error)
+    });
   }
 });
 
@@ -1391,87 +1454,10 @@ CRITICAL: Keep the updatedItinerary schema extremely robust. It must contain 'da
     return res.json(result);
 
   } catch (error: any) {
-    console.warn("Failed to modify itinerary with Gemini AI (attempting graceful local fallback):", error.message || error);
-    
-    // Attempt to parse user message for key phrases to make the UI update beautifully feel instant/fluent, even under quota exhaustion!
-    try {
-      const { itinerary, message } = req.body || {};
-      if (itinerary) {
-        const msgLower = (message || "").toLowerCase();
-        let updated = JSON.parse(JSON.stringify(itinerary));
-        let chatbotResponse = "Our smart travel co-pilot has locally processed your update request due to high service demand. ";
-
-        // 1. Detect stops changes
-        if (msgLower.includes("nonstop") || msgLower.includes("non-stop") || msgLower.includes("direct")) {
-          updated.flightDetails = getFallbackFlights(updated.departure || "JFK", updated.destination || "NAP", "nonstop");
-          chatbotResponse += "I have updated your flight details to show nonstop options for you.";
-        } else if (msgLower.includes("one stop") || msgLower.includes("1 stop") || msgLower.includes("one-stop")) {
-          updated.flightDetails = getFallbackFlights(updated.departure || "JFK", updated.destination || "NAP", "one");
-          chatbotResponse += "I have updated your flight details to show flights with exactly one layover.";
-        } else if (msgLower.includes("any stop") || msgLower.includes("all flights")) {
-          updated.flightDetails = getFallbackFlights(updated.departure || "JFK", updated.destination || "NAP", "any");
-          chatbotResponse += "I have reset your flight options to show a mix of direct and multi-stop flight routes.";
-        }
-
-        // 2. Detect pace changes
-        if (msgLower.includes("relaxed") || msgLower.includes("leisurely") || msgLower.includes("slower")) {
-          // Re-generate complete fallback with relaxed pace
-          const opt = {
-            citizenship: updated.citizenshipStatus || "United States",
-            departure: updated.departureAirport || "JFK",
-            destination: updated.destination || "Milan, Italy",
-            isInternational: true,
-            hasDates: true,
-            durationDays: updated.durationDays || 5,
-            pace: "relaxed",
-            preferredStops: updated.flightDetails?.preferredStops || "any"
-          };
-          updated = generateFallbackItinerary(opt);
-          chatbotResponse += "I have adjusted the pacing of your itinerary to Relaxed. Your schedule is now optimized with 2 highly detailed events per day to prevent fatigue.";
-        } else if (msgLower.includes("adventurous") || msgLower.includes("dense") || msgLower.includes("active")) {
-          const opt = {
-            citizenship: updated.citizenshipStatus || "United States",
-            departure: updated.departureAirport || "JFK",
-            destination: updated.destination || "Milan, Italy",
-            isInternational: true,
-            hasDates: true,
-            durationDays: updated.durationDays || 5,
-            pace: "adventurous",
-            preferredStops: updated.flightDetails?.preferredStops || "any"
-          };
-          updated = generateFallbackItinerary(opt);
-          chatbotResponse += "I have moved your pacing to Adventurous! Your days are now action-packed with 5-6 granular, exciting slots including sunset watches.";
-        } else if (msgLower.includes("balanced")) {
-          const opt = {
-            citizenship: updated.citizenshipStatus || "United States",
-            departure: updated.departureAirport || "JFK",
-            destination: updated.destination || "Milan, Italy",
-            isInternational: true,
-            hasDates: true,
-            durationDays: updated.durationDays || 5,
-            pace: "balanced",
-            preferredStops: updated.flightDetails?.preferredStops || "any"
-          };
-          updated = generateFallbackItinerary(opt);
-          chatbotResponse += "I have restored your pacing to Balanced. Your daily plan features a solid structure of 4 comfortable milestones and dining breaks.";
-        }
-
-        if (chatbotResponse === "Our smart travel co-pilot has locally processed your update request due to high service demand. ") {
-          chatbotResponse = `I have preserved your itinerary safely. Our AI service is currently experiencing very high demand (quota exceeded), but you can continue viewing, printing, and checking off items on your current travel package!`;
-        }
-
-        return res.json({
-          assistantMessage: chatbotResponse,
-          updatedItinerary: updated
-        });
-      }
-    } catch (fallbackErr) {
-      console.error("Local fallback modifier failed:", fallbackErr);
-    }
-
+    console.warn("Failed to modify itinerary with Gemini AI:", error.message || error);
     return res.status(500).json({ 
-      error: "Unable to process modification requests with our AI companion.",
-      details: error.message 
+      error: "Unable to complete modification request with our AI companion because the service experienced an error or timeout. Please refresh the page and try your request again.",
+      details: error.message || String(error)
     });
   }
 });

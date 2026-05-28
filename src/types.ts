@@ -92,6 +92,12 @@ export interface TravelItinerary {
   budget: BudgetEstimation;
   flightDetails?: FlightDetailsSection;
   isFallback?: boolean;
+  accommodationRecommendation?: {
+    stayType: string; // e.g., "hotel", "airbnb", "split"
+    heading: string;
+    locationStrategy: string;
+    detailedReasoning: string;
+  };
 }
 
 export interface DestinationRecommendation {
@@ -123,7 +129,7 @@ export interface PlannerPreferences {
   durationDays?: number;
   departureTime?: string;
   arrivalTime?: string;
-  accommodationType: 'hotel' | 'airbnb' | 'both';
+  accommodationType: 'hotel' | 'airbnb' | 'both' | 'ai_recommended';
   transportType: 'rental' | 'taxi_public' | 'ai_recommended';
   pace: 'relaxed' | 'balanced' | 'adventurous';
   peopleCount: number;

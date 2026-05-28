@@ -35,7 +35,7 @@ const INITIAL_PREFERENCES: PlannerPreferences = {
   durationDays: 5,
   departureTime: '10:00 AM',
   arrivalTime: '04:00 PM',
-  accommodationType: 'both',
+  accommodationType: 'ai_recommended',
   transportType: 'ai_recommended',
   pace: 'balanced',
   peopleCount: 1,
@@ -195,6 +195,9 @@ export default function App() {
   const [isShowingRecs, setIsShowingRecs] = useState(false);
   const [searchRecQuery, setSearchRecQuery] = useState('');
 
+  // Randomized popular destinations list for the dropdown
+  const [randomizedPopularDestinations, setRandomizedPopularDestinations] = useState<string[]>([]);
+
   // Suggestions state
   const [showDepartureSuggest, setShowDepartureSuggest] = useState(false);
   const [showDestinationSuggest, setShowDestinationSuggest] = useState(false);
@@ -247,6 +250,10 @@ export default function App() {
 
   // Load recommendations on mount
   useEffect(() => {
+    // Shuffle the popular destinations list to randomize choices beautifully
+    const shuffled = [...POPULAR_DESTINATIONS].sort(() => Math.random() - 0.5);
+    setRandomizedPopularDestinations(shuffled);
+
     fetch('/api/itinerary/recommendations')
       .then((res) => res.json())
       .then((data) => setRecommendations(data))
@@ -300,6 +307,55 @@ export default function App() {
     }
   }, []);
 
+  const getRecommendedDurationForLocation = (dest: string): { days: number; reasoning: string } => {
+    if (!dest) return { days: 5, reasoning: "Perfect standard duration to explore central sites and core landmarks." };
+    const destClean = dest.toLowerCase();
+    
+    // Check if it matches any recommendation in our fetched curated list
+    const matchedRec = recommendations?.find(r => 
+      destClean.includes(r.name.toLowerCase()) || 
+      destClean.includes(r.country.toLowerCase())
+    );
+    if (matchedRec && matchedRec.recommendedDurationDays) {
+      return {
+        days: matchedRec.recommendedDurationDays,
+        reasoning: `Highly recommended for ${matchedRec.name} to comfortably experience top landmarks like ${matchedRec.highlights?.slice(0, 2).join(' & ') || 'highlights'} without feeling rushed.`
+      };
+    }
+
+    // Handcrafted logical mappings for popular spots
+    if (destClean.includes("hawaii") || destClean.includes("big island") || destClean.includes("maui") || destClean.includes("oahu") || destClean.includes("kauai")) {
+      return { days: 6, reasoning: "Allows comfortable transit between beaches, volcanic parks, and scenic marine highlights." };
+    }
+    if (destClean.includes("tokyo") || destClean.includes("kyoto") || destClean.includes("london") || destClean.includes("paris") || destClean.includes("rome") || destClean.includes("barcelona")) {
+      return { days: 5, reasoning: "Perfect to cover major metropolitan districts, world-class dining, and historic museum hubs." };
+    }
+    if (destClean.includes("banff") || destClean.includes("national park") || destClean.includes("roadtrip") || destClean.includes("alps") || destClean.includes("jasper")) {
+      return { days: 6, reasoning: "Ideal for mountain hikes, scenic alpine roadways, glacier sightseeing, and relaxed outdoor intervals." };
+    }
+    if (destClean.includes("new york") || destClean.includes("nyc") || destClean.includes("phoenix") || destClean.includes("sf") || destClean.includes("san francisco")) {
+      return { days: 4, reasoning: "Excellent for focused metropolitan weekend escapes or highly dense urban exploration itineraries." };
+    }
+    
+    // Default matching logic based on domestic vs international
+    const isInt = !destClean.includes("usa") && 
+                  !destClean.includes("hawaii") && 
+                  !destClean.includes("arizona") &&
+                  !destClean.includes("california") &&
+                  !destClean.includes("new york");
+    if (isInt) {
+      return { 
+        days: 7, 
+        reasoning: "Recommended stay length for overseas voyages to compensate for travel time and multi-base encampments." 
+      };
+    }
+    
+    return { 
+      days: 5, 
+      reasoning: "Perfect for domestic trips to comfortably enjoy key landmarks and local cuisine within standard vacation windows." 
+    };
+  };
+
   // Core destination analysis to set dynamic defaults (duration, roadtrip, transit modes)
   const handleSelectDestination = (destName: string) => {
     const isInt = !destName.toLowerCase().includes("usa") && 
@@ -310,7 +366,8 @@ export default function App() {
                   !destName.toLowerCase().includes("phoenix") &&
                   !destName.toLowerCase().includes("island");
 
-    let dur = 5;
+    const recDetails = getRecommendedDurationForLocation(destName);
+    let dur = recDetails.days;
     let autoRoadtrip = false;
     let autoCar = "ai_recommended";
     const lower = destName.toLowerCase();
@@ -470,6 +527,12 @@ export default function App() {
 
   // Perform Gemini full-itinerary dispatch call
   const handleFetchItinerary = async () => {
+    if (!preferences.citizenship || !preferences.citizenship.trim()) {
+      setError("Citizenship declaration is mandatory! Please navigate back to Step 2 and declare your nationality first.");
+      setActiveStep(2);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setActiveStep(6);
@@ -581,7 +644,11 @@ export default function App() {
         {/* Header Block with humbler descriptive brand naming */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-200/80">
           <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-            <div className="flex items-center gap-3">
+            <div 
+              onClick={handleResetPlanner}
+              className="flex items-center gap-3 cursor-pointer hover:opacity-85 active:scale-[0.98] transition-all"
+              title="Return to Home Screen"
+            >
               <div className="p-3 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-md shadow-indigo-500/10">
                 <Compass className="w-6 h-6 text-indigo-400 animate-pulse" />
               </div>
@@ -660,32 +727,61 @@ export default function App() {
             </button>
             <span className="text-slate-305 text-xs font-mono select-none">&bull;</span>
             <button 
-              onClick={() => preferences.destination && setActiveStep(2)}
-              disabled={activeStep <= 2 || !preferences.destination}
+              onClick={() => {
+                if (preferences.destination) {
+                  setError(null);
+                  setActiveStep(2);
+                }
+              }}
+              disabled={!preferences.destination}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${activeStep === 2 ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50 disabled:opacity-50'}`}
             >
               2. Crew & Visa
             </button>
             <span className="text-slate-305 text-xs font-mono select-none">&bull;</span>
             <button 
-              onClick={() => preferences.destination && setActiveStep(3)}
-              disabled={activeStep <= 3 || !preferences.destination}
+              onClick={() => {
+                if (!preferences.citizenship || !preferences.citizenship.trim()) {
+                  setError("Citizenship is mandatory! Declare your passport nationality in Step 2 to continue.");
+                  setActiveStep(2);
+                  return;
+                }
+                setError(null);
+                setActiveStep(3);
+              }}
+              disabled={!preferences.destination}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${activeStep === 3 ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50 disabled:opacity-50'}`}
             >
               3. Timing
             </button>
             <span className="text-slate-305 text-xs font-mono select-none">&bull;</span>
             <button 
-              onClick={() => preferences.destination && setActiveStep(4)}
-              disabled={activeStep <= 4 || !preferences.destination}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${activeStep === 4 ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-605 hover:bg-slate-50 disabled:opacity-50'}`}
+              onClick={() => {
+                if (!preferences.citizenship || !preferences.citizenship.trim()) {
+                  setError("Citizenship is mandatory! Declare your passport nationality in Step 2 to continue.");
+                  setActiveStep(2);
+                  return;
+                }
+                setError(null);
+                setActiveStep(4);
+              }}
+              disabled={!preferences.destination}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${activeStep === 4 ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50 disabled:opacity-50'}`}
             >
               4. Style
             </button>
             <span className="text-slate-305 text-xs font-mono select-none">&bull;</span>
             <button 
-              onClick={() => preferences.destination && setActiveStep(5)}
-              disabled={activeStep <= 5 || !preferences.destination}
+              onClick={() => {
+                if (!preferences.citizenship || !preferences.citizenship.trim()) {
+                  setError("Citizenship is mandatory! Declare your passport nationality in Step 2 to continue.");
+                  setActiveStep(2);
+                  return;
+                }
+                setError(null);
+                setActiveStep(5);
+              }}
+              disabled={!preferences.destination}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${activeStep === 5 ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-400 disabled:opacity-50'}`}
             >
               5. Budget
@@ -806,15 +902,31 @@ export default function App() {
                     <label className="block text-xs font-bold text-slate-705 uppercase tracking-widest">
                       Destination City / Country Coordinates
                     </label>
-                    <button
-                      type="button"
-                      id="btn-choose-for-me"
-                      onClick={() => setIsShowingRecs(!isShowingRecs)}
-                      className="text-xs font-bold text-indigo-650 hover:text-indigo-750 flex items-center gap-1.5 mt-0.5 cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      I don't know, help me choose!
-                    </button>
+                    <div className="flex items-center gap-3.5 flex-wrap">
+                      <button
+                        type="button"
+                        id="btn-random-dest"
+                        onClick={() => {
+                          const randomIdx = Math.floor(Math.random() * POPULAR_DESTINATIONS.length);
+                          const chosen = POPULAR_DESTINATIONS[randomIdx];
+                          handleSelectDestination(chosen);
+                          setError(null);
+                        }}
+                        className="text-[10px] font-black uppercase text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 transition shadow-2xs"
+                        title="Randomly select a popular destination to plan a surprise trip!"
+                      >
+                        🎲 Surprise Me (Random)
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-choose-for-me"
+                        onClick={() => setIsShowingRecs(!isShowingRecs)}
+                        className="text-xs font-bold text-indigo-650 hover:text-indigo-750 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Help me choose!
+                      </button>
+                    </div>
                   </div>
 
                   <div className="relative">
@@ -836,7 +948,7 @@ export default function App() {
                     {/* Suggestions dropdown */}
                     {showDestinationSuggest && (
                       <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
-                        {POPULAR_DESTINATIONS.filter(item => 
+                        {randomizedPopularDestinations.filter(item => 
                           item.toLowerCase().includes(preferences.destination.toLowerCase())
                         ).map((item) => (
                           <button
@@ -849,7 +961,7 @@ export default function App() {
                             <span>{item}</span>
                           </button>
                         ))}
-                        {POPULAR_DESTINATIONS.filter(item => 
+                        {randomizedPopularDestinations.filter(item => 
                           item.toLowerCase().includes(preferences.destination.toLowerCase())
                         ).length === 0 && (
                           <div className="px-4 py-3 text-xs italic text-slate-400">
@@ -924,8 +1036,9 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Field 1: Passport declaration */}
                 <div className="relative">
-                  <label className="block text-xs font-bold text-slate-705 uppercase tracking-widest mb-1.5">
-                    Your Citizenship (Exclusion & Visa logic)
+                  <label className="block text-xs font-bold text-slate-705 uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                    <span>Your Citizenship (Exclusion & Visa logic)</span>
+                    <span className="text-[10px] bg-rose-50 text-rose-700 border border-rose-250/50 px-2 py-0.5 rounded font-black tracking-normal normal-case">* Mandatory Field</span>
                   </label>
                   <input
                     type="text"
@@ -1008,6 +1121,10 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setError(null);
+                    if (!preferences.citizenship || !preferences.citizenship.trim()) {
+                      setError("Citizenship declaration is mandatory! Please search or select your nationality to evaluate accurate dynamic entry requirements.");
+                      return;
+                    }
                     setActiveStep(3);
                   }}
                   className="px-6 py-3 rounded-xl bg-slate-950 text-white font-semibold text-xs transition hover:bg-slate-800 flex items-center gap-1 cursor-pointer"
@@ -1145,6 +1262,36 @@ export default function App() {
                           />
                           <span className="text-xs text-slate-500">Days</span>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {preferences.destination && (
+                    <div className="bg-white rounded-xl p-4 border border-slate-200 flex items-start gap-3 mt-4 shadow-2xs">
+                      <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                          Wander AI Recommended Duration: <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-black text-[10px] font-mono">{getRecommendedDurationForLocation(preferences.destination).days} Days</span>
+                        </h5>
+                        <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+                          {getRecommendedDurationForLocation(preferences.destination).reasoning}
+                        </p>
+                        {preferences.durationDays !== getRecommendedDurationForLocation(preferences.destination).days && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const recommendedDays = getRecommendedDurationForLocation(preferences.destination).days;
+                              if (preferences.hasDates) {
+                                handleDurationDaysChangeForDates(recommendedDays);
+                              } else {
+                                setPreferences(prev => ({ ...prev, durationDays: recommendedDays }));
+                              }
+                            }}
+                            className="text-[10px] font-black text-indigo-600 hover:text-indigo-850 transition underline underline-offset-2 flex items-center gap-1 mt-1 cursor-pointer"
+                          >
+                            ⚡ Click to apply recommended {getRecommendedDurationForLocation(preferences.destination).days} days stay
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1305,6 +1452,7 @@ export default function App() {
                       onChange={(e: any) => setPreferences({ ...preferences, accommodationType: e.target.value })}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-indigo-500/20"
                     >
+                      <option value="ai_recommended">🎒 AI Recommended (Let Wander select the best lodgings)</option>
                       <option value="both">Both Hotels & Airbnbs at destination</option>
                       <option value="hotel">Hotels (Comfort & premium services)</option>
                       <option value="airbnb">Airbnb (Local villas & entire homes)</option>
@@ -1597,6 +1745,7 @@ export default function App() {
                       onUpdateItinerary={(updated) => setItinerary(updated)}
                       departure={preferences.departure}
                       citizenship={preferences.citizenship}
+                      preferences={preferences}
                     />
                   </div>
                 )
