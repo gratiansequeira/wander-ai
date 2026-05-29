@@ -98,6 +98,8 @@ export interface TravelItinerary {
     locationStrategy: string;
     detailedReasoning: string;
   };
+  isShared?: boolean;
+  modelUsed?: string;
 }
 
 export interface DestinationRecommendation {

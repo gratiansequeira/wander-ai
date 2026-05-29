@@ -263,6 +263,10 @@ export default function App() {
   // Sync itinerary changes to localStorage
   useEffect(() => {
     if (itinerary) {
+      if (itinerary.isShared) {
+        // Do not persist shared itineraries to local storage so root URL stays clean
+        return;
+      }
       localStorage.setItem('active_travel_itinerary', JSON.stringify(itinerary));
     } else {
       localStorage.removeItem('active_travel_itinerary');
@@ -292,7 +296,10 @@ export default function App() {
         })
         .then((data) => {
           if (data.success && data.itinerary) {
-            setItinerary(data.itinerary);
+            setItinerary({
+              ...data.itinerary,
+              isShared: true
+            });
             setActiveStep(6);
           }
         })
@@ -1715,9 +1722,26 @@ export default function App() {
                   <div className="space-y-6 animate-fade-in">
                     <div className="bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 print:hidden">
                       <div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-800 bg-indigo-50 border border-indigo-150 px-2.5 py-1 rounded-full">
-                          Your custom itinerary is ready
-                        </span>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-800 bg-indigo-50 border border-indigo-150 px-2.5 py-1 rounded-full">
+                            Your custom itinerary is ready
+                          </span>
+                          {itinerary.isShared && (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full animate-pulse">
+                              <span>Viewing Shared Plan</span>
+                            </span>
+                          )}
+                          {itinerary.modelUsed === 'gemini-3.1-flash-lite' ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full" title="Gemini Flash quota was used up, which is why Flash Lite backup was used. The response may be slightly less detailed.">
+                              <span>AI Engine: Gemini Flash Lite</span>
+                              <span className="hidden sm:inline font-semibold opacity-85">&bull; Backup mode active &bull;</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-150 px-2.5 py-1 rounded-full">
+                              <span>AI Engine: Gemini Flash</span>
+                            </span>
+                          )}
+                        </div>
                         <h2 className="text-2xl font-extrabold text-slate-950 mt-2">
                           Trip Planner Overview &bull; <span className="text-indigo-700">{itinerary.destination}</span>
                         </h2>
@@ -1728,16 +1752,31 @@ export default function App() {
                           <span>&bull;</span>
                           <span>Citizenship checked: <strong className="text-slate-800 font-bold">{itinerary.citizenshipStatus}</strong></span>
                         </p>
+                        {itinerary.modelUsed === 'gemini-3.1-flash-lite' && (
+                          <p className="text-[10.5px] text-amber-600 font-medium mt-1.5 border border-amber-100 bg-amber-50/50 p-2 rounded-xl">
+                            ⚠️ <strong>Flash Quota Exhausted:</strong> The premium Gemini Flash model's daily rate limits have been temporarily exceeded for today. We automatically fell back to the high-speed <strong>Gemini Flash Lite</strong> engine. Elements of the itinerary may be slightly shorter or less descriptive than standard.
+                          </p>
+                        )}
                       </div>
 
-                      <button
-                        id="btn-re-create"
-                        type="button"
-                        onClick={handleAdjustPlanner}
-                        className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-750 font-bold text-xs rounded-xl border border-slate-205 transition shrink-0 cursor-pointer"
-                      >
-                        Adjust planning elements
-                      </button>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button
+                          id="btn-re-create"
+                          type="button"
+                          onClick={handleAdjustPlanner}
+                          className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-755 font-bold text-xs rounded-xl border border-indigo-205 transition cursor-pointer"
+                        >
+                          Adjust elements
+                        </button>
+                        <button
+                          id="btn-plan-new-trip"
+                          type="button"
+                          onClick={handleResetPlanner}
+                          className="px-4 py-2 bg-slate-950 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-xs"
+                        >
+                          Plan a New Trip
+                        </button>
+                      </div>
                     </div>
 
                     <ItineraryViewer
